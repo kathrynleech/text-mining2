@@ -1,0 +1,216 @@
+---
+title: 'Topic Modeling Badge'
+subtitle: "LASER Institute TM Learning Lab 2"
+author: "Katie Leech"
+date: "`r format(Sys.Date(),'%B %e, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+![](img/tm.png){width="300"}
+
+The final activity for each learning lab provides space to work with data and to reflect on how the concepts and techniques introduced in each lab might apply to your own research.
+
+To earn a badge for each lab, you are required to respond to a set of prompts for two parts: 
+
+-   In Part I, you will reflect on your understanding of key concepts and begin to think about potential next steps for your own study.
+
+-   In Part II, you will create a simple data product in R that demonstrates your ability to apply a data analysis technique introduced in this learning lab.
+
+### Part I: Reflect and Plan
+
+Use the institutional library (e.g. [NCSU Library](https://www.lib.ncsu.edu/#articles)), [Google Scholar](https://scholar.google.com/) or search engine to locate a research article, presentation, or resource that applies text mining to an educational context or topic of interest. More specifically, **locate a text mining study that visualize text data.**
+
+1.  Provide an APA citation for your selected study.
+
+    -    -   Shears, J., Kim, S., Kirven, J., & Coakley, T. (2020). Fathers’ Reflections of their Fathers: The Use of Text Mining to Find Meaning in Narratives. In Handbook of Fathers and Child Development (pp. 65-88). Springer, Cham.
+
+2.  How does topic modeling address research questions?
+
+    -   The topic model examined individuals' responses to the question, "Talk about your experience with your father as a child.” The LDA model identified 6 topics within the responses. 
+    
+Draft a research question for a population you may be interested in studying, or that would be of interest to educational researchers, and that would require the collection of text data and answer the following questions:
+
+1.  What text data would need to be collected?
+
+    -   My research objective would be to analyze parents' responses to the question, "When you hear the word 'science', what comes to mind for a 4- to 6-year-old child?". The text data would be open-ended, written responses to this question. 
+
+2.  For what reason would text data need to be collected in order to address this question?
+
+    -   I am interested in understanding the topics that parents' associate when thinking about science for young children. 
+
+3.  Explain the analytical level at which these text data would need to be collected and analyzed.
+
+    -   Parents completed a survey on Qualtrics and wrote their response to the question, "When you hear the word 'science', what comes to mind for a 4- to 6-year-old child?". I downloaded responses into an excel file, imported them into R, tokenized the data, cast a document term matrix, and ran the LDA and STM models.  
+
+### Part II: Data Product
+
+Use your case study file to try a small number of topics (e.g., 3) or a large number of topics (e.g., 30) and explain how changing number of topics shape the way you interpret results.
+
+I highly recommend creating a new R script in your lab-3 folder to complete this task. When your code is ready to share, use the code chunk below to share the final code for your model and answer the questions that follow.
+
+```{r, my-data-product}
+#Note this is my data to address the above research question, how do parents respond to the question, "what comes to mind when you hear the word science for four- to six-year-old children?". This is a small N (N=87) to use as pilot data, and I plan to collect more data in the future to make better inferences. 
+
+# Load Packages
+library(tidyverse)
+library(tidytext)
+library(SnowballC)
+library(topicmodels)
+library(stm)
+library(ldatuning)
+library(knitr)
+library(LDAvis)
+library(readxl)
+
+#Import data
+sciresponses <- read_xlsx("data/bcser_openendedresponses_8Nov2022.xlsx")
+
+#Remove first 2 rows from Qualtrics dataset
+sciresponses = sciresponses[-1,]
+sciresponses = sciresponses[-1,]
+
+sciresponses <- sciresponses %>% drop_na(FID)
+```
+
+```{r}
+response_tidy <- sciresponses %>%
+  unnest_tokens(output = word, input = sci_def) %>%
+  anti_join(stop_words, by = "word")
+
+response_tidy
+```
+```{r count-words}
+response_tidy %>%
+  count(word, sort = TRUE)
+```
+
+```{r cast-dtm}
+response_dtm <- response_tidy %>%
+  count(FID, word) %>%
+  cast_dtm(FID, word, n)
+```
+
+```{r textProcessor}
+temp <- textProcessor(sciresponses$sci_def, 
+                    metadata = sciresponses,  
+                    lowercase=TRUE, 
+                    removestopwords=TRUE, 
+                    removenumbers=TRUE,  
+                    removepunctuation=TRUE, 
+                    wordLengths=c(3,Inf),
+                    stem=TRUE,
+                    onlycharacter= FALSE, 
+                    striphtml=TRUE, 
+                    customstopwords=NULL)
+```
+```{r stm-inputs}
+meta <- temp$meta
+vocab <- temp$vocab
+docs <- temp$documents
+```
+
+#Small # of topics (K=5)
+```{r tidy_lda_small}
+#LDA
+response_lda_small <- LDA(response_dtm, 
+                  k = 5, 
+                  control = list(seed = 588)
+                  )
+response_lda_small
+
+#STM
+response_stm_small <- stm(documents=docs, 
+         data=meta,
+         vocab=vocab, 
+         prevalence =~ p_edu,
+         K=5,
+         max.em.its=25,
+         verbose = FALSE)
+response_stm_small  
+
+plot.STM(response_stm_small, n = 5)
+
+tidy_lda_small <- tidy(response_lda_small)
+tidy_lda_small
+
+top_terms_small <- tidy_lda_small %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 5, with_ties = FALSE) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+top_terms_small %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  group_by(topic, term) %>%    
+  arrange(desc(beta)) %>%  
+  ungroup() %>%
+  ggplot(aes(beta, term, fill = as.factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  scale_y_reordered() +
+  labs(title = "Top 5 terms in each LDA topic",
+       x = expression(beta), y = NULL) +
+  facet_wrap(~ topic, ncol = 4, scales = "free")
+
+```
+#Large # of topics (K=8)
+```{r tidy_lda_large}
+#LDA
+response_lda_large <- LDA(response_dtm, 
+                  k = 8, 
+                  control = list(seed = 588)
+                  )
+response_lda_large
+
+#STM
+response_stm_large <- stm(documents=docs, 
+         data=meta,
+         vocab=vocab, 
+         prevalence =~ p_edu,
+         K=8,
+         max.em.its=25,
+         verbose = FALSE)
+response_stm_large  
+
+plot.STM(response_stm_large, n = 8)
+
+tidy_lda_large <- tidy(response_lda_large)
+tidy_lda_large
+
+top_terms_large <- tidy_lda_large %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 5, with_ties = FALSE) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+top_terms_large %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  group_by(topic, term) %>%    
+  arrange(desc(beta)) %>%  
+  ungroup() %>%
+  ggplot(aes(beta, term, fill = as.factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  scale_y_reordered() +
+  labs(title = "Top 5 terms in each LDA topic",
+       x = expression(beta), y = NULL) +
+  facet_wrap(~ topic, ncol = 4, scales = "free")
+
+
+```
+### Interpretations 
+
+## Interpretation of LDA with K=5
+#What is science for young children?
+
+Topic 1: Fun activities
+Topic 2: Experimentation
+Topic 3: Inquiry
+Topic 4: Earth/space science
+Topic 5: Biological science
+
+## How does small vs. large number of topics shape interpretation?
+Because the dataset is rather small, the LDA with more topics has several overlapping topics and makes it hard to interpret. Given the size of this dataset and the length of the responses, I would recommend sticking with a small number of topics. In the future, I plan to collect more responses, which would allow me to explore whether there are additional topics represented in responses. 
+

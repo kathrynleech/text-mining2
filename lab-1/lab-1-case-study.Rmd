@@ -1,6 +1,6 @@
 ---
 title: "Lab 1: Text Mining Basics - Tidy Text & Word Counts"
-author: "Dr. Shiyan Jiang"
+author: "Katie Leech"
 output: 
   html_document:
     toc: true
@@ -357,6 +357,7 @@ questions by commenting out a line or lines in your R script like so:
     on this function or check this handy [cheatsheet for the readr
     package](https://github.com/rstudio/cheatsheets/blob/master/data-import.pdf)
     from the `readr` website at <https://readr.tidyverse.org/index.html>
+  # I would need to add the col_names argument and set it to equal TRUE to prevent R from setting the first row as column names.  
 2.  What is the first argument that `read_csv()` always expects and what
     happens if you don't include in quotes?
 3.  What package would I need if I wanted to read a Microsoft Excel file

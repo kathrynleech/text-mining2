@@ -1,0 +1,163 @@
+---
+title: 'Sentiment Analysis Badge'
+subtitle: "LASER Institute TM Learning Lab 2"
+author: "Dr. Shiyan Jiang"
+date: "`r format(Sys.Date(),'%B %e, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+![](img/dm.png){width="300"}
+
+The final activity for each learning lab provides space to work with data and to reflect on how the concepts and techniques introduced in each lab might apply to your own research.
+
+To earn a badge for each lab, you are required to respond to a set of prompts for two parts: 
+
+-   In Part I, you will reflect on your understanding of key concepts and begin to think about potential next steps for your own study.
+
+-   In Part II, you will create a simple data product in R that demonstrates your ability to apply a data analysis technique introduced in this learning lab.
+
+### Part I: Reflect and Plan
+
+Use the institutional library (e.g. [NCSU Library](https://www.lib.ncsu.edu/#articles)), [Google Scholar](https://scholar.google.com/) or search engine to locate a research article, presentation, or resource that applies text mining to an educational context or topic of interest. More specifically, **locate a text mining study that visualize text data.**
+
+1.  Provide an APA citation for your selected study.
+
+    -   Shears, J., Kim, S., Kirven, J., & Coakley, T. (2020). Fathers’ Reflections of their Fathers: The Use of Text Mining to Find Meaning in Narratives. In Handbook of Fathers and Child Development (pp. 65-88). Springer, Cham.
+
+
+2.  How does the sentiment analysis address research questions?
+
+    -   The authors used sentiment analysis to examine positive and negative words used when individuals talked about their fathers (specific prompt was: “Talk about your experience with your father as a child.”) 
+
+Draft a research question for a population you may be interested in studying, or that would be of interest to educational researchers, and that would require the collection of text data and answer the following questions:
+
+1.  What text data would need to be collected?
+
+    -   My research objective would be to analyze parents' responses to the question, "When you hear the word 'science', what comes to mind for a 4- to 6-year-old child?". The text data would be open-ended, written responses to this question. 
+
+2.  For what reason would text data need to be collected in order to address this question?
+
+    -   The text data would allow me to analyze whether the responses are positive, negative, or neutral valence, and thus provide some indication of parents' thoughts about science for young children. 
+
+3.  Explain the analytical level at which these text data would need to be collected and analyzed.
+
+    -   Parents would complete a survey on Qualtrics and write their response to the question, ""When you hear the word 'science', what comes to mind for a 4- to 6-year-old child?". Responses would be downloaded into a .csv file, imported into R, tokenized, and then analyzed for AFINN and bing scores. 
+
+### Part II: Data Product
+
+Use your case study file to create small multiples like the following figure:
+
+![](img/smallm.png){width="500"}
+
+I highly recommend creating a new R script in your lab-2 folder to complete this task. When your code is ready to share, use the code chunk below to share the final code for your model and answer the questions that follow.
+
+```{r, my-data-product}
+# Load libraries
+library(dplyr)
+library(readr)
+library(tidyr)
+library(writexl)
+library(readxl)
+library(tidytext)
+library(textdata)
+library(ggplot2)
+library(scales)
+
+#Read in data
+sciresponses <- read_xlsx("data/bcser_openendedresponses_8Nov2022.xlsx")
+sciresponses_text <- sciresponses %>% select(FID, sci_def,c_female, p_edu)
+#Remove first 2 rows from Qualtrics dataset
+sciresponses_text = sciresponses_text[-1,]
+sciresponses_text = sciresponses_text[-1,]
+
+sciresponses_text <- sciresponses_text %>% drop_na(FID)
+```
+#### Tokenize Text
+```{r}
+#Tokenize
+response_tokens <- unnest_tokens(sciresponses_text, word, sci_def)
+
+
+#Remove stop words
+tidy_response <-
+  response_tokens %>%
+  anti_join(stop_words, by = "word")
+```
+
+### Add Sentiment Values
+
+```{r}
+afinn <- get_sentiments("afinn")
+afinn
+
+bing <- get_sentiments("bing")
+bing
+
+#Join data
+sentiment_afinn <- inner_join(tidy_response, afinn, by = "word")
+sentiment_afinn
+
+sentiment_bing <- inner_join(tidy_response, bing, by = "word")
+sentiment_bing
+```
+
+#### Sentiment Counts and Ratios
+```{r}
+summary_bing <- sentiment_bing %>% 
+  group_by(c_female, FID) %>% 
+  count(sentiment, sort = TRUE) %>% 
+  spread(sentiment, n) %>%
+  mutate(sentiment = positive - negative) %>%
+  mutate(lexicon = "bing") %>%
+  relocate(lexicon)
+
+summary_bing
+
+summary_afinn <- sentiment_afinn %>% 
+  group_by(c_female, FID) %>% 
+  summarise(sentiment = sum(value)) %>% 
+  mutate(lexicon = "AFINN") %>%
+  relocate(lexicon)
+summary_afinn
+
+afinn_score <- sentiment_afinn %>% 
+  group_by(c_female, FID) %>% 
+  summarise(value = sum(value))
+afinn_score
+
+afinn_sentiment <- afinn_score %>%
+  filter(value != 0) %>%
+  mutate(sentiment = if_else(value < 0, "negative", "positive"))
+afinn_sentiment
+
+#AFINN ratio
+afinn_ratio <- afinn_sentiment %>% 
+  group_by(c_female) %>% 
+  count(sentiment) %>% 
+  spread(sentiment, n) %>%
+  mutate(ratio = negative/positive)
+
+afinn_ratio
+
+```
+### Knit & Submit
+
+Congratulations, you've completed your Intro to text mining Badge! Complete the following steps to submit your work for review:
+
+1.  Change the name of the `author:` in the [YAML header](https://monashdatafluency.github.io/r-rep-res/yaml-header.html) at the very top of this document to your name. As noted in [Reproducible Research in R](https://monashdatafluency.github.io/r-rep-res/index.html), The YAML header controls the style and feel for knitted document but doesn't actually display in the final output.
+
+2.  Click the yarn icon above to "knit" your data product to a [HTML](https://bookdown.org/yihui/rmarkdown/html-document.html) file that will be saved in your R Project folder.
+
+3.  Commit your changes in GitHub Desktop and push them to your online GitHub repository.
+
+4.  Publish your HTML page the web using one of the following [publishing methods](https://rpubs.com/cathydatascience/518692):
+
+    -   Publish on [RPubs](https://rpubs.com) by clicking the "Publish" button located in the Viewer Pane when you knit your document. Note, you will need to quickly create a RPubs account.
+
+    -   Publishing on GitHub using either [GitHub Pages](https://pages.github.com) or the [HTML previewer](http://htmlpreview.github.io).
+
+5.  Post a new discussion on GitHub to our [Text mining Badges forum](https://github.com/orgs/laser-institute/teams/network-analysis/discussions/3). In your post, include a link to your published web page and a short reflection highlighting one thing you learned from this lab and one thing you'd like to explore further.
